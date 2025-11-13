@@ -40,6 +40,8 @@ impl Location {
 pub struct Program {
     pub nombre: String,
     pub definiciones: Definitions,
+    pub modulos: Vec<Modulo>,
+    pub sentencias: Vec<Statement>,
     pub location: Location,
 }
 
@@ -100,6 +102,167 @@ pub struct CoaxialDecl {
 }
 
 // ============================================================================
+// MÓDULOS
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub struct Modulo {
+    pub nombre: String,
+    pub sentencias: Vec<Statement>,
+    pub location: Location,
+}
+
+// ============================================================================
+// SENTENCIAS
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub enum Statement {
+    // coloca(objeto, x, y);
+    Coloca {
+        objeto: String,
+        x: Expr,
+        y: Expr,
+        location: Location,
+    },
+
+    // colocaCoaxial(coaxial, x, y, direccion);
+    ColocaCoaxial {
+        coaxial: String,
+        x: Expr,
+        y: Expr,
+        direccion: Direccion,
+        location: Location,
+    },
+
+    // colocaCoaxialConcentrador(coaxial, concentrador);
+    ColocaCoaxialConcentrador {
+        coaxial: String,
+        concentrador: String,
+        location: Location,
+    },
+
+    // uneMaquinaPuerto(maquina, concentrador, puerto);
+    UneMaquinaPuerto {
+        maquina: String,
+        concentrador: String,
+        puerto: Expr,
+        location: Location,
+    },
+
+    // asignaPuerto(maquina, concentrador);
+    AsignaPuerto {
+        maquina: String,
+        concentrador: String,
+        location: Location,
+    },
+
+    // maquinaCoaxial(maquina, coaxial, pos);
+    MaquinaCoaxial {
+        maquina: String,
+        coaxial: String,
+        posicion: Expr,
+        location: Location,
+    },
+
+    // asignaMaquinaCoaxial(maquina, coaxial);
+    AsignaMaquinaCoaxial {
+        maquina: String,
+        coaxial: String,
+        location: Location,
+    },
+
+    // escribe(expr);
+    Escribe {
+        contenido: Expr,
+        location: Location,
+    },
+
+    // si (condicion) inicio sentencias fin sino inicio sentencias fin
+    Si {
+        condicion: Expr,
+        entonces: Vec<Statement>,
+        sino: Option<Vec<Statement>>,
+        location: Location,
+    },
+
+    // Llamada a módulo
+    LlamadaModulo {
+        nombre: String,
+        location: Location,
+    },
+}
+
+// ============================================================================
+// EXPRESIONES
+// ============================================================================
+
+#[derive(Debug, Clone)]
+pub enum Expr {
+    // Literales
+    Numero(i32),
+    Cadena(String),
+    Identificador(String),
+
+    // Acceso a campos: obj.campo
+    AccesoCampo {
+        objeto: String,
+        campo: String,
+    },
+
+    // Acceso a arreglo: obj[indice]
+    AccesoArreglo {
+        objeto: String,
+        indice: Box<Expr>,
+    },
+
+    // Expresiones relacionales: a < b, a = b, etc.
+    Relacional {
+        izq: Box<Expr>,
+        op: OpRelacional,
+        der: Box<Expr>,
+    },
+
+    // Expresiones lógicas: a && b, a || b
+    Logico {
+        izq: Box<Expr>,
+        op: OpLogico,
+        der: Box<Expr>,
+    },
+
+    // Negación lógica: !expr
+    Not(Box<Expr>),
+}
+
+// ============================================================================
+// OPERADORES
+// ============================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OpRelacional {
+    Igual,      // =
+    Diferente,  // <>
+    Menor,      // <
+    Mayor,      // >
+    MenorIgual, // <=
+    MayorIgual, // >=
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OpLogico {
+    And, // &&
+    Or,  // ||
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Direccion {
+    Arriba,
+    Abajo,
+    Izquierda,
+    Derecha,
+}
+
+// ============================================================================
 // HELPER: Para imprimir el AST de manera legible
 // ============================================================================
 
@@ -108,9 +271,24 @@ impl Program {
         println!("\n{}", "═".repeat(80));
         println!("AST del Programa: {}", self.nombre);
         println!("{}", "═".repeat(80));
-        
+
         self.definiciones.pretty_print();
-        
+
+        if !self.modulos.is_empty() {
+            println!("\n📦 Módulos definidos: {}", self.modulos.len());
+            for (i, modulo) in self.modulos.iter().enumerate() {
+                println!("   {}. modulo {} (línea {}) - {} sentencias",
+                         i + 1, modulo.nombre, modulo.location.line, modulo.sentencias.len());
+            }
+        }
+
+        if !self.sentencias.is_empty() {
+            println!("\n🔧 Sentencias principales: {}", self.sentencias.len());
+            for (i, stmt) in self.sentencias.iter().enumerate() {
+                println!("   {}. {:?}", i + 1, format!("{:?}", stmt).chars().take(60).collect::<String>());
+            }
+        }
+
         println!("{}\n", "═".repeat(80));
     }
 }
