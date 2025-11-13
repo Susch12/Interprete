@@ -7,12 +7,14 @@ mod lexer;
 mod parser;
 mod ast;
 mod error;
+mod semantic;
 
 use lexer::Lexer;
 use parser::Parser;
+use semantic::SemanticAnalyzer;
 
 fn main() {
-    println!("{}", "=== FASE 2: ANALIZADOR SINTÁCTICO COMPLETO ===".cyan().bold());
+    println!("{}", "=== FASE 3.1: ANÁLISIS SEMÁNTICO - Sistema de Tipos y Tabla de Símbolos ===".cyan().bold());
     
     let args: Vec<String> = env::args().collect();
 
@@ -116,6 +118,25 @@ fn main() {
 
                     // Mostrar AST
                     programa.pretty_print();
+
+                    // ========== ANÁLISIS SEMÁNTICO ==========
+                    println!("\n{}", "📝 Analizando semánticamente...".yellow().bold());
+
+                    let mut semantic_analyzer = SemanticAnalyzer::new();
+
+                    match semantic_analyzer.analyze(&programa) {
+                        Ok(_) => {
+                            println!("{}", "✅ Análisis semántico completado exitosamente".green().bold());
+
+                            // Mostrar tabla de símbolos
+                            print_symbol_table(&semantic_analyzer.symbol_table);
+                        }
+                        Err(semantic_errors) => {
+                            semantic::report_semantic_errors(&semantic_errors, &source);
+                            println!("{}", "❌ Análisis semántico falló".red().bold());
+                            process::exit(1);
+                        }
+                    }
                 }
                 Err(parse_errors) => {
                     parser::report_parse_errors(&parse_errors, &source);
@@ -178,6 +199,59 @@ fn main() {
             process::exit(1);
         }
     }
+}
+
+fn print_symbol_table(table: &semantic::SymbolTable) {
+    use colored::*;
+
+    println!("\n{}", "═".repeat(80));
+    println!("{}", "TABLA DE SÍMBOLOS".cyan().bold());
+    println!("{}", "═".repeat(80));
+
+    if !table.maquinas.is_empty() {
+        println!("\n{} Máquinas:", "📦".green());
+        for (nombre, sym) in &table.maquinas {
+            let estado = if sym.presente { "colocada".green() } else { "no colocada".yellow() };
+            println!("  • {} - {}", nombre.bold(), estado);
+        }
+    }
+
+    if !table.concentradores.is_empty() {
+        println!("\n{} Concentradores:", "🔌".green());
+        for (nombre, sym) in &table.concentradores {
+            let estado = if sym.presente { "colocado".green() } else { "no colocado".yellow() };
+            let coax = if sym.tiene_coaxial { "+ coaxial" } else { "" };
+            println!("  • {} - {} puertos {} - {} disponibles - {}",
+                     nombre.bold(),
+                     sym.puertos,
+                     coax,
+                     sym.disponibles,
+                     estado);
+        }
+    }
+
+    if !table.coaxiales.is_empty() {
+        println!("\n{} Cables Coaxiales:", "📡".green());
+        for (nombre, sym) in &table.coaxiales {
+            let estado = if sym.presente { "colocado".green() } else { "no colocado".yellow() };
+            let completo = if sym.completo { "completo".red() } else { "disponible".green() };
+            println!("  • {} - {}m - {} máquinas - {} - {}",
+                     nombre.bold(),
+                     sym.longitud,
+                     sym.num_maquinas,
+                     completo,
+                     estado);
+        }
+    }
+
+    if !table.modulos.is_empty() {
+        println!("\n{} Módulos:", "📦".green());
+        for nombre in table.modulos.keys() {
+            println!("  • {}", nombre.bold());
+        }
+    }
+
+    println!("\n{}", "═".repeat(80));
 }
 
 fn print_token_statistics(tokens: &[lexer::TokenInfo]) {
