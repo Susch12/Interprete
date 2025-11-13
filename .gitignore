@@ -1,0 +1,18 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# Test files
+**/*.net
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

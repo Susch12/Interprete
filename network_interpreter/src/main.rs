@@ -4,11 +4,15 @@ use std::fs;
 use std::process;
 
 mod lexer;
+mod parser;
+mod ast;
+mod error;
 
 use lexer::Lexer;
+use parser::Parser;
 
 fn main() {
-    println!("{}", "=== FASE 1.2: ANALIZADOR LÉXICO AVANZADO ===".cyan().bold());
+    println!("{}", "=== FASE 2: ANALIZADOR SINTÁCTICO COMPLETO ===".cyan().bold());
     
     let args: Vec<String> = env::args().collect();
 
@@ -98,8 +102,27 @@ fn main() {
                          lexeme_display);
             }
             println!("{}", "─".repeat(90));
-            
+
             println!("\n{}", "✅ Análisis léxico completado exitosamente".green().bold());
+
+            // ========== ANÁLISIS SINTÁCTICO ==========
+            println!("\n{}", "📝 Analizando sintácticamente...".yellow().bold());
+
+            let mut parser = Parser::new(tokens.clone());
+
+            match parser.parse() {
+                Ok(programa) => {
+                    println!("{}", "✅ Análisis sintáctico completado exitosamente".green().bold());
+
+                    // Mostrar AST
+                    programa.pretty_print();
+                }
+                Err(parse_errors) => {
+                    parser::report_parse_errors(&parse_errors, &source);
+                    println!("{}", "❌ Análisis sintáctico falló".red().bold());
+                    process::exit(1);
+                }
+            }
         }
         Err(errors) => {
             println!("{} Se encontraron {} error(es) léxico(s):\n", 
