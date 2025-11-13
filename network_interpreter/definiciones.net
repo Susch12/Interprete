@@ -1,0 +1,15 @@
+// Test simple para Fase 2.1 - Parser de Definiciones
+programa test_definiciones;
+
+define maquinas
+    A, B, C;
+
+define concentradores
+    hub1=4, hub2=8.1;
+
+define segmento
+    cable1=10, cable2=50;
+
+inicio
+fin.
+
