@@ -7,12 +7,16 @@ mod lexer;
 mod parser;
 mod ast;
 mod error;
+mod semantic;
+mod interpreter;
 
 use lexer::Lexer;
 use parser::Parser;
+use semantic::SemanticAnalyzer;
+use interpreter::{Interpreter, ConexionMaquina};
 
 fn main() {
-    println!("{}", "=== FASE 2: ANALIZADOR SINTÁCTICO COMPLETO ===".cyan().bold());
+    println!("{}", "=== FASE 4: INTÉRPRETE - Ejecución del Programa ===".cyan().bold());
     
     let args: Vec<String> = env::args().collect();
 
@@ -116,6 +120,52 @@ fn main() {
 
                     // Mostrar AST
                     programa.pretty_print();
+
+                    // ========== ANÁLISIS SEMÁNTICO ==========
+                    println!("\n{}", "📝 Analizando semánticamente...".yellow().bold());
+
+                    let mut semantic_analyzer = SemanticAnalyzer::new();
+
+                    match semantic_analyzer.analyze(&programa) {
+                        Ok(_) => {
+                            println!("{}", "✅ Análisis semántico completado exitosamente".green().bold());
+
+                            // Mostrar tabla de símbolos
+                            print_symbol_table(&semantic_analyzer.symbol_table);
+
+                            // ========== EJECUCIÓN DEL PROGRAMA ==========
+                            println!("\n{}", "🚀 Ejecutando programa...".yellow().bold());
+
+                            let mut interpreter = Interpreter::new(&semantic_analyzer.symbol_table);
+
+                            match interpreter.ejecutar(&programa) {
+                                Ok(_) => {
+                                    println!("{}", "✅ Ejecución completada exitosamente".green().bold());
+
+                                    // Mostrar output del programa
+                                    let output = interpreter.env.obtener_output();
+                                    if !output.is_empty() {
+                                        println!("\n{}", "📤 OUTPUT DEL PROGRAMA:".cyan().bold());
+                                        println!("{}", "═".repeat(80));
+                                        println!("{}", output);
+                                        println!("{}", "═".repeat(80));
+                                    }
+
+                                    // Mostrar estado de la red
+                                    print_network_state(&interpreter.env);
+                                }
+                                Err(runtime_error) => {
+                                    println!("\n{} {}", "❌ Error de ejecución:".red().bold(), runtime_error);
+                                    process::exit(1);
+                                }
+                            }
+                        }
+                        Err(semantic_errors) => {
+                            semantic::report_semantic_errors(&semantic_errors, &source);
+                            println!("{}", "❌ Análisis semántico falló".red().bold());
+                            process::exit(1);
+                        }
+                    }
                 }
                 Err(parse_errors) => {
                     parser::report_parse_errors(&parse_errors, &source);
@@ -178,6 +228,149 @@ fn main() {
             process::exit(1);
         }
     }
+}
+
+fn print_symbol_table(table: &semantic::SymbolTable) {
+    use colored::*;
+
+    println!("\n{}", "═".repeat(80));
+    println!("{}", "TABLA DE SÍMBOLOS".cyan().bold());
+    println!("{}", "═".repeat(80));
+
+    if !table.maquinas.is_empty() {
+        println!("\n{} Máquinas:", "📦".green());
+        for (nombre, sym) in &table.maquinas {
+            let estado = if sym.presente { "colocada".green() } else { "no colocada".yellow() };
+            println!("  • {} - {}", nombre.bold(), estado);
+        }
+    }
+
+    if !table.concentradores.is_empty() {
+        println!("\n{} Concentradores:", "🔌".green());
+        for (nombre, sym) in &table.concentradores {
+            let estado = if sym.presente { "colocado".green() } else { "no colocado".yellow() };
+            let coax = if sym.tiene_coaxial { "+ coaxial" } else { "" };
+            println!("  • {} - {} puertos {} - {} disponibles - {}",
+                     nombre.bold(),
+                     sym.puertos,
+                     coax,
+                     sym.disponibles,
+                     estado);
+        }
+    }
+
+    if !table.coaxiales.is_empty() {
+        println!("\n{} Cables Coaxiales:", "📡".green());
+        for (nombre, sym) in &table.coaxiales {
+            let estado = if sym.presente { "colocado".green() } else { "no colocado".yellow() };
+            let completo = if sym.completo { "completo".red() } else { "disponible".green() };
+            println!("  • {} - {}m - {} máquinas - {} - {}",
+                     nombre.bold(),
+                     sym.longitud,
+                     sym.num_maquinas,
+                     completo,
+                     estado);
+        }
+    }
+
+    if !table.modulos.is_empty() {
+        println!("\n{} Módulos:", "📦".green());
+        for nombre in table.modulos.keys() {
+            println!("  • {}", nombre.bold());
+        }
+    }
+
+    println!("\n{}", "═".repeat(80));
+}
+
+fn print_network_state(env: &interpreter::Environment) {
+    println!("\n{}", "═".repeat(80));
+    println!("{}", "ESTADO DE LA RED DESPUÉS DE LA EJECUCIÓN".cyan().bold());
+    println!("{}", "═".repeat(80));
+
+    // Mostrar máquinas
+    if !env.maquinas.is_empty() {
+        println!("\n{} Máquinas:", "💻".green());
+        for (nombre, maq) in &env.maquinas {
+            let estado = if maq.colocada {
+                format!("colocada en ({}, {})", maq.x, maq.y).green()
+            } else {
+                "no colocada".yellow()
+            };
+
+            let conexion = match &maq.conectada_a {
+                Some(ConexionMaquina::Puerto { concentrador, puerto }) => {
+                    format!(" → conectada al puerto {} de '{}'", puerto, concentrador).cyan().to_string()
+                }
+                Some(ConexionMaquina::Coaxial { coaxial, posicion }) => {
+                    format!(" → conectada al coaxial '{}' en posición {}m", coaxial, posicion).cyan().to_string()
+                }
+                None => String::new()
+            };
+
+            println!("  • {} - {}{}",
+                     nombre.bold(),
+                     estado,
+                     conexion);
+        }
+    }
+
+    // Mostrar concentradores
+    if !env.concentradores.is_empty() {
+        println!("\n{} Concentradores:", "🔌".green());
+        for (nombre, conc) in &env.concentradores {
+            let estado = if conc.colocado {
+                format!("colocado en ({}, {})", conc.x, conc.y).green()
+            } else {
+                "no colocado".yellow()
+            };
+
+            let puertos_usados = conc.puertos - conc.disponibles;
+            let coax_info = if let Some(ref coax) = conc.coaxial_asignado {
+                format!(" [coaxial: {}]", coax).cyan().to_string()
+            } else {
+                String::new()
+            };
+
+            println!("  • {} - {} - {}/{} puertos usados{}",
+                     nombre.bold(),
+                     estado,
+                     puertos_usados,
+                     conc.puertos,
+                     coax_info);
+        }
+    }
+
+    // Mostrar coaxiales
+    if !env.coaxiales.is_empty() {
+        println!("\n{} Cables Coaxiales:", "📡".green());
+        for (nombre, coax) in &env.coaxiales {
+            let estado = if coax.colocado {
+                format!("colocado en ({}, {}) - dirección: {}", coax.x, coax.y, coax.direccion).green()
+            } else {
+                "no colocado".yellow()
+            };
+
+            let num_maq = coax.maquinas.len();
+            let completo = if coax.completo { " [COMPLETO]".red().to_string() } else { String::new() };
+
+            println!("  • {} - {}m - {} - {} máquinas{}",
+                     nombre.bold(),
+                     coax.longitud,
+                     estado,
+                     num_maq,
+                     completo);
+
+            // Mostrar máquinas conectadas
+            if !coax.maquinas.is_empty() {
+                for (maq_nombre, pos) in &coax.maquinas {
+                    println!("    ╰→ {} en posición {}m", maq_nombre, pos);
+                }
+            }
+        }
+    }
+
+    println!("\n{}", "═".repeat(80));
 }
 
 fn print_token_statistics(tokens: &[lexer::TokenInfo]) {
