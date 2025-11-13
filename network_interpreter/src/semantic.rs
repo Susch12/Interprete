@@ -472,6 +472,24 @@ impl SemanticAnalyzer {
     // ========== Validación de Expresiones ==========
 
     fn check_expression(&mut self, expr: &Expr, expected_type: &Type, location: &Location) -> Type {
+        let actual_type = self.infer_expression_type(expr, location);
+
+        // Validar tipo si no es Unknown (Unknown permite cualquier tipo)
+        if expected_type != &Type::Unknown && actual_type != Type::Unknown {
+            if !self.types_are_compatible(&actual_type, expected_type) {
+                self.errors.push(SemanticError::new(
+                    format!("Incompatibilidad de tipos: se esperaba '{}' pero se encontró '{}'",
+                            expected_type.to_string(),
+                            actual_type.to_string()),
+                    location.clone()
+                ));
+            }
+        }
+
+        actual_type
+    }
+
+    fn infer_expression_type(&mut self, expr: &Expr, location: &Location) -> Type {
         match expr {
             Expr::Numero(_) => Type::Int,
 
@@ -501,7 +519,8 @@ impl SemanticAnalyzer {
                         "puertos" | "disponibles" | "presente" | "coaxial" => Type::Int,
                         _ => {
                             self.errors.push(SemanticError::new(
-                                format!("Campo '{}' no existe en concentrador '{}'", campo, objeto),
+                                format!("Campo '{}' no existe en concentrador '{}'. Campos válidos: puertos, disponibles, presente, coaxial",
+                                        campo, objeto),
                                 location.clone()
                             ));
                             Type::Unknown
@@ -512,7 +531,8 @@ impl SemanticAnalyzer {
                         "longitud" | "completo" | "num" | "presente" => Type::Int,
                         _ => {
                             self.errors.push(SemanticError::new(
-                                format!("Campo '{}' no existe en coaxial '{}'", campo, objeto),
+                                format!("Campo '{}' no existe en coaxial '{}'. Campos válidos: longitud, completo, num, presente",
+                                        campo, objeto),
                                 location.clone()
                             ));
                             Type::Unknown
@@ -520,7 +540,7 @@ impl SemanticAnalyzer {
                     }
                 } else {
                     self.errors.push(SemanticError::new(
-                        format!("Objeto '{}' no está definido", objeto),
+                        format!("Objeto '{}' no está definido o no soporta acceso a campos", objeto),
                         location.clone()
                     ));
                     Type::Unknown
@@ -555,9 +575,22 @@ impl SemanticAnalyzer {
                 }
             }
 
-            Expr::Relacional { izq, op: _, der } => {
-                self.check_expression(izq, &Type::Unknown, location);
-                self.check_expression(der, &Type::Unknown, location);
+            Expr::Relacional { izq, op, der } => {
+                let tipo_izq = self.infer_expression_type(izq, location);
+                let tipo_der = self.infer_expression_type(der, location);
+
+                // Validar que los tipos sean compatibles para comparación
+                if tipo_izq != Type::Unknown && tipo_der != Type::Unknown {
+                    if !self.types_are_compatible(&tipo_izq, &tipo_der) {
+                        self.errors.push(SemanticError::new(
+                            format!("No se pueden comparar tipos incompatibles: '{}' {:?} '{}'",
+                                    tipo_izq.to_string(),
+                                    op,
+                                    tipo_der.to_string()),
+                            location.clone()
+                        ));
+                    }
+                }
                 Type::Bool
             }
 
@@ -575,6 +608,28 @@ impl SemanticAnalyzer {
     }
 
     // ========== Helpers ==========
+
+    fn types_are_compatible(&self, actual: &Type, expected: &Type) -> bool {
+        // Unknown es compatible con todo (permisivo)
+        if actual == &Type::Unknown || expected == &Type::Unknown {
+            return true;
+        }
+
+        // Mismo tipo exacto
+        if actual == expected {
+            return true;
+        }
+
+        // Reglas especiales de compatibilidad
+        match (actual, expected) {
+            // Int puede usarse como Bool en contextos lógicos (0 = false, != 0 = true)
+            (Type::Int, Type::Bool) => true,
+            // Bool puede convertirse a Int (false = 0, true = 1)
+            (Type::Bool, Type::Int) => true,
+            // Cualquier otro caso es incompatible
+            _ => false,
+        }
+    }
 
     fn check_maquina_exists(&mut self, nombre: &str, location: &Location) {
         if self.symbol_table.obtener_maquina(nombre).is_none() {
