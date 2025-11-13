@@ -257,6 +257,14 @@ impl SymbolTable {
             return Err(format!("El nombre '{}' ya está en uso por un concentrador", nombre));
         }
 
+        // Validar reglas Ethernet: longitud del cable debe estar entre 3m y 500m
+        if longitud < 3 {
+            return Err(format!("Longitud de cable coaxial inválida: {}m. La longitud mínima según reglas Ethernet es 3m", longitud));
+        }
+        if longitud > 500 {
+            return Err(format!("Longitud de cable coaxial inválida: {}m. La longitud máxima según reglas Ethernet es 500m", longitud));
+        }
+
         self.coaxiales.insert(nombre.clone(), CoaxialSymbol::new(nombre, longitud, location));
         Ok(())
     }
@@ -307,6 +315,9 @@ impl SemanticError {
 pub struct SemanticAnalyzer {
     pub symbol_table: SymbolTable,
     pub errors: Vec<SemanticError>,
+    // Rastrear asignaciones de máquinas a cables coaxiales durante el análisis
+    // Mapa: nombre_coaxial -> Vec<(nombre_maquina, posicion)>
+    coaxial_assignments: std::collections::HashMap<String, Vec<(String, i32)>>,
 }
 
 impl SemanticAnalyzer {
@@ -314,6 +325,7 @@ impl SemanticAnalyzer {
         Self {
             symbol_table: SymbolTable::new(),
             errors: Vec::new(),
+            coaxial_assignments: std::collections::HashMap::new(),
         }
     }
 
@@ -432,7 +444,16 @@ impl SemanticAnalyzer {
             Statement::MaquinaCoaxial { maquina, coaxial, posicion, location } => {
                 self.check_maquina_exists(maquina, location);
                 self.check_coaxial_exists(coaxial, location);
-                self.check_expression(posicion, &Type::Int, location);
+
+                // Inferir la posición (debe ser un número entero)
+                let tipo_pos = self.check_expression(posicion, &Type::Int, location);
+
+                // Validar reglas Ethernet para colocar máquina en coaxial
+                if tipo_pos == Type::Int {
+                    if let Expr::Numero(pos_val) = posicion {
+                        self.validate_maquina_coaxial_placement(maquina, coaxial, *pos_val, location);
+                    }
+                }
             }
 
             Statement::AsignaMaquinaCoaxial { maquina, coaxial, location } => {
@@ -665,6 +686,47 @@ impl SemanticAnalyzer {
                 format!("Objeto '{}' no está definido (no es máquina ni concentrador)", nombre),
                 location.clone()
             ));
+        }
+    }
+
+    // ========== Validaciones de Reglas Ethernet ==========
+
+    fn validate_maquina_coaxial_placement(&mut self, maquina: &str, coaxial: &str, posicion: i32, location: &Location) {
+        // Obtener información del coaxial
+        if let Some(coax) = self.symbol_table.obtener_coaxial(coaxial) {
+            let longitud = coax.longitud;
+
+            // Regla 1: La posición debe estar dentro del rango del cable (0 a longitud)
+            if posicion < 0 || posicion > longitud {
+                self.errors.push(SemanticError::new(
+                    format!("Posición inválida: {}m. La posición debe estar entre 0 y {} (longitud del cable '{}')",
+                            posicion, longitud, coaxial),
+                    location.clone()
+                ));
+                return;
+            }
+
+            // Regla 2: Cada máquina debe estar separada al menos 3m de otras máquinas
+            // Usar el HashMap temporal para obtener las asignaciones durante el análisis
+            if let Some(assignments) = self.coaxial_assignments.get(coaxial) {
+                for (maq_existente, pos_existente) in assignments {
+                    let distancia = (posicion - pos_existente).abs();
+                    if distancia < 3 {
+                        self.errors.push(SemanticError::new(
+                            format!("Violación de regla Ethernet: La máquina '{}' está demasiado cerca ({}m) de la máquina '{}' en posición {}m. La separación mínima es 3m",
+                                    maquina, distancia, maq_existente, pos_existente),
+                            location.clone()
+                        ));
+                        return;
+                    }
+                }
+            }
+
+            // Registrar esta asignación si no hay errores
+            self.coaxial_assignments
+                .entry(coaxial.to_string())
+                .or_insert_with(Vec::new)
+                .push((maquina.to_string(), posicion));
         }
     }
 }
