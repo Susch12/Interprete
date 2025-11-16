@@ -10,6 +10,9 @@ logos = "0.13"
 # Terminal colors (para errores bonitos)
 colored = "2.0"
 
+# GUI framework para visualización
+iced = { version = "0.13", features = ["canvas"] }
+
 [dev-dependencies]
 # Para testing
 criterion = "0.5"

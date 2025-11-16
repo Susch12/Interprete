@@ -162,6 +162,7 @@ impl RuntimeCoaxial {
 // AMBIENTE DE EJECUCIÓN
 // ============================================================================
 
+#[derive(Clone)]
 pub struct Environment {
     pub maquinas: HashMap<String, RuntimeMaquina>,
     pub concentradores: HashMap<String, RuntimeConcentrador>,

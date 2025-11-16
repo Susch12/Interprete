@@ -9,6 +9,7 @@ mod ast;
 mod error;
 mod semantic;
 mod interpreter;
+mod visualizer;
 
 use lexer::Lexer;
 use parser::Parser;
@@ -16,18 +17,18 @@ use semantic::SemanticAnalyzer;
 use interpreter::{Interpreter, ConexionMaquina};
 
 fn main() {
-    println!("{}", "=== FASE 4: INTÉRPRETE - Ejecución del Programa ===".cyan().bold());
+    println!("{}", "=== PROYECTO COMPLETO: FASES 1-5 ===".cyan().bold());
     
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
         eprintln!("{}", "Error: No se especificó archivo de entrada".red().bold());
-        eprintln!("Uso: {} <archivo.net>", args[0]);
-        eprintln!("\n{}", "Archivos de prueba disponibles:".yellow());
-        eprintln!("  {} - Ejemplo simple", "test_simple.net".green());
-        eprintln!("  {} - Ejemplo complejo del PDF", "test_complejo.net".green());
-        eprintln!("  {} - Test de palabra 'segmento'", "test_segmento.net".green());
-        eprintln!("  {} - Test con errores léxicos", "test_errores.net".green());
+        eprintln!("Uso: {} <archivo.net> [--visualize|-v]", args[0]);
+        eprintln!("\n{}", "Opciones:".yellow());
+        eprintln!("  {} o {}  - Mostrar visualización gráfica de la topología", "--visualize".green(), "-v".green());
+        eprintln!("\n{}", "Ejemplos:".yellow());
+        eprintln!("  {} test_interpreter_simple.net", args[0]);
+        eprintln!("  {} test_interpreter_coaxial.net --visualize", args[0]);
         process::exit(1);
     }
 
@@ -153,6 +154,16 @@ fn main() {
 
                                     // Mostrar estado de la red
                                     print_network_state(&interpreter.env);
+
+                                    // Visualizar si se especificó la opción --visualize
+                                    if args.contains(&"--visualize".to_string()) || args.contains(&"-v".to_string()) {
+                                        println!("\n{}", "🖼️  Lanzando visualizador...".cyan().bold());
+                                        if let Err(e) = visualizer::run(interpreter.env) {
+                                            eprintln!("{} {}", "Error al lanzar visualizador:".red().bold(), e);
+                                        }
+                                    } else {
+                                        println!("\n{}", "💡 Tip: Usa --visualize o -v para ver la topología gráficamente".yellow());
+                                    }
                                 }
                                 Err(runtime_error) => {
                                     println!("\n{} {}", "❌ Error de ejecución:".red().bold(), runtime_error);
